@@ -209,4 +209,5 @@ pyvenv.cfg
 .venv
 pip-selfcheck.json
 
-!/config.ini
+/config.ini
+/bewegungsmelder.sqlite
