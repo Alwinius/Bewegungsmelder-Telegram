@@ -6,6 +6,6 @@ import enum
 
 
 class Schedule(enum.Enum):
-    NONE = 0
-    WEEKLY = 1
-    DAILY = 2
+    NONE = "k"
+    WEEKLY = "wöchentlich "
+    DAILY = "täglich "

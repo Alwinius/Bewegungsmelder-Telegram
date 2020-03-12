@@ -10,12 +10,13 @@ from bot.components.base import Base, Session, engine
 from bot.components.event import Event
 from bot.components.user import User
 from bot.components.category import Category
-from datetime import datetime, timedelta
+from bot.components.schedule import Schedule
+from datetime import datetime, timedelta, time, timezone
 from copy import deepcopy
 
 from sqlalchemy import and_, func
 from telegram.ext import CallbackContext, Updater, CommandHandler, CallbackQueryHandler, Filters, MessageHandler
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Message
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Message, Bot
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 
@@ -30,6 +31,20 @@ def get_filter_overview(user_id: int):
         else:
             msg += "🚫 " + cat + "\n"
     msg += "und diese Gruppen:\n"
+    session.close()
+    return msg
+
+
+def process_notifications(user_id: int, args: list):
+    session = Session()
+    user = session.query(User).filter(User.id == user_id).first()
+    if len(args) > 1:
+        new_notification: Schedule = Schedule[args[1]]
+        if new_notification != user.notify_schedule:
+            user.notify_schedule = new_notification
+            session.commit()
+    msg = "Du bekommst aktuell " + user.notify_schedule.value + "eine Benachrichtigung über Veranstaltungen passend zu " \
+                                                                "deinen Filtereinstellungen."
     session.close()
     return msg
 
@@ -96,7 +111,8 @@ def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
             else:
                 btns[-1].append(btn)
                 first_element = True
-    btns.append([InlineKeyboardButton("Veranstaltungen", callback_data="0$0"), InlineKeyboardButton("Gruppen filtern", callback_data="1")])
+    btns.append([InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
+                 InlineKeyboardButton("Gruppen filtern", callback_data="1")])
     session.close()
 
     return msg, InlineKeyboardMarkup(btns)
@@ -133,7 +149,7 @@ def inline_callback(update: Update, context: CallbackContext):
     #     0 - list events according to saved filters, payload: day
     #     1 - modify groups, payload: id, enable 1 /disable 0 - TODO
     #     2 - modify event categories: id, enable 1 /disable 0
-    #     3 - modify notifications: to be defined - TODO
+    #     3 - modify notifications: Schedule.name
     #     4 - filter overview
 
     if args[0] == "H":
@@ -160,6 +176,15 @@ def inline_callback(update: Update, context: CallbackContext):
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "2":
         msg, reply_markup = process_categories(message.chat.id, args)
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+    elif args[0] == "3":
+        msg = process_notifications(message.chat.id, args)
+        reply_markup = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("tägliche Benachrichtigungen", callback_data="3$" + Schedule.DAILY.name)],
+             [InlineKeyboardButton("wöchentliche Benachrichtigungen", callback_data="3$" + Schedule.WEEKLY.name)],
+             [InlineKeyboardButton("keine Benachrichtigungen", callback_data="3$" + Schedule.NONE.name)],
+             [InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
+              InlineKeyboardButton("Filter", callback_data="4")]])
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     else:
         logging.error("unknown inline command")
@@ -200,36 +225,28 @@ def inline_callback(update: Update, context: CallbackContext):
     # send_developer_message(context.bot, dev_msg)
 
 
-# def send_notifications(bot=None):
-#     if bot is None:
-#         bot = Bot(token=config['BotToken'])
-#
-#     plans = {}
-#     for mensa_id, mensa_name in MENSEN.items():
-#         print(f"Getting plan for {mensa_name} (#{mensa_id})")
-#         plans[mensa_id] = menu_manager.get_menu(mensa_id)
-#
-#     noti_btn = InlineKeyboardButton("Auto-Update deaktivieren", callback_data="5$0")
-#     reply_markup = InlineKeyboardMarkup([[noti_btn]] + button_list)
-#
-#     session = Session()
-#     users = session.query(User).filter(User.notifications > 0)
-#     for user in users:
-#         user.counter += 1
-#         session.commit()
-#         try:
-#             print("Sending plan to", user.first_name)
-#             send(bot, user.id, plans[int(user.notifications)].get_meals_message(),
-#                  reply_markup=reply_markup, message_id=user.message_id)
-#         except TypeError:
-#             logging.exception(f"Caught TypeError while processing user {user.first_name}")
-#
-#     session.close()
+def send_notifications(bot=None):
+    if bot is None:
+        bot = Bot(token=config['BotToken'])
+
+    reply_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
+          InlineKeyboardButton("Benachrichtigungen ändern", callback_data="3")]])
+
+    session = Session()
+    users = session.query(User).filter(User.notify_schedule == Schedule.DAILY)
+    for user in users:
+        user.counter += 1
+        session.commit()
+        msg = get_events(0, user.id)
+        send(bot, user.id, msg,
+             reply_markup=reply_markup)
+    session.close()
 
 
-# def job_callback(context: CallbackContext):
-#     logging.debug("Scheduled notification update triggered")
-#     send_notifications(bot=context.bot)
+def job_callback(context: CallbackContext):
+    logging.debug("Scheduled notification update triggered")
+    send_notifications(bot=context.bot)
 
 
 def run_daemon():
@@ -248,11 +265,11 @@ def run_daemon():
     dispatcher.add_handler(fallback_handler)
 
     # schedule daily update
-    # hour = int(config.get('NotificationHour', 16))
-    # first = datetime.time(hour=hour, minute=0)
-    # now = datetime.datetime.now()
-    # logging.info(f"Job will run daily at {first}. Server time is {now.strftime('%H:%M:%S')}.")
-    # updater.job_queue.run_daily(job_callback, time=first)
+    hour = int(config.get('NotificationHour', 1))
+    first = time(hour=hour, minute=1)
+    now = datetime.now(timezone.utc)
+    logging.info(f"Job will run daily at {first}. UTC time is {now.strftime('%H:%M:%S')}.")
+    updater.job_queue.run_daily(job_callback, time=first)
 
     webhook_url = config.get('WebhookUrl', "").strip()
     if len(webhook_url) > 0:
