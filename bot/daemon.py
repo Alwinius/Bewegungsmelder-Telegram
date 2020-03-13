@@ -2,38 +2,22 @@
 # -*- coding: utf-8 -*-
 # created by Alwin Ebermann (alwin@alwin.net.au)
 
-import logging
+from datetime import datetime, timedelta, time
 from typing import List
-from bot.messaging import checkuser, send, send_developer_message
-from bot.components import config
-from bot.scraper import Scraper
-from bot.components.base import Base, Session, engine
-from bot.components.event import Event
-from bot.components.user import User
-from bot.components.category import Category
-from bot.components.schedule import Schedule
-from datetime import datetime, timedelta, time, timezone
-from copy import deepcopy
 
 from sqlalchemy import and_, func
+from telegram import Update, Message, Bot
 from telegram.ext import CallbackContext, Updater, CommandHandler, CallbackQueryHandler, Filters, MessageHandler
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, Message, Bot
+
+from bot.components import config
+from bot.components.base import Base, engine
+from bot.components.event import Event
+from bot.components.filter import *
+from bot.components.schedule import Schedule
+from bot.messaging import checkuser, send, send_developer_message
+from bot.scraper import Scraper
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
-
-
-def get_filter_overview(user_id: int):
-    session = Session()
-    user = session.query(User).filter(User.id == user_id).first()
-    msg = "Du siehst aktuell folgende Kategorien:\n"
-    for cat in Category:
-        if cat in user.selected_categories:
-            msg += "✅ " + cat.value + "\n"
-        else:
-            msg += "🚫 " + cat.value + "\n"
-    msg += "und diese Gruppen:\n"
-    session.close()
-    return msg
 
 
 def process_notifications(user_id: int, args: list):
@@ -44,8 +28,9 @@ def process_notifications(user_id: int, args: list):
         if new_notification != user.notify_schedule:
             user.notify_schedule = new_notification
             session.commit()
-    msg = "Du bekommst aktuell " + user.notify_schedule.value + "eine Benachrichtigung über Veranstaltungen passend zu " \
-                                                                "deinen Filtereinstellungen."
+    msg = "Du bekommst aktuell " + str(
+        user.notify_schedule.value) + "eine Benachrichtigung über Veranstaltungen passend zu " \
+                                      "deinen Filtereinstellungen."
     session.close()
     return msg
 
@@ -65,7 +50,7 @@ def get_events(date: int, chat_id: int) -> [str, bool]:
                                               func.date(Event.end) >= selected_date.date()))
     user = session.query(User).filter(User.id == chat_id).first()
     for event in events:
-        if event.event_category in user.selected_categories:
+        if event.event_category in user.selected_categories and event.group not in user.excluded_groups:
             events_today = True
             msg += str(event)
     session.close()
@@ -75,59 +60,15 @@ def get_events(date: int, chat_id: int) -> [str, bool]:
         return "Leider finden " + print_day + " keine Veranstaltungen statt.", False
 
 
-def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
-    session = Session()
-    user = session.query(User).filter(User.id == chat_id).first()
-    if len(args) > 2:
-        cat: Category = Category[args[2]]
-        selected_categories = deepcopy(user.selected_categories)
-        if args[1] == "1" and cat not in user.selected_categories:  # this means enable
-            selected_categories.append(cat)
-            user.selected_categories = selected_categories
-            session.commit()
-        elif args[1] == "0" and cat in user.selected_categories:  # this means disable
-            logging.debug("removing item from categories")
-            selected_categories.remove(cat)
-            user.selected_categories = selected_categories
-            session.commit()
-    msg = "Du siehst aktuell folgende Kategorien:\n"
-    first_element = True
-    btns = []
-    for cat in Category:
-        if cat in user.selected_categories:
-            msg += "✅ " + cat.value + "\n"
-            btn = InlineKeyboardButton(cat.value, callback_data="2$0$" + cat.name)
-            if first_element:
-                btns.append([btn])
-                first_element = False
-            else:
-                btns[-1].append(btn)
-                first_element = True
-        else:
-            msg += "🚫 " + cat.value + "\n"
-            btn = InlineKeyboardButton(cat.value, callback_data="2$1$" + cat.name)
-            if first_element:
-                btns.append([btn])
-                first_element = False
-            else:
-                btns[-1].append(btn)
-                first_element = True
-    btns.append([InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
-                 InlineKeyboardButton("Gruppen filtern", callback_data="1")])
-    session.close()
-
-    return msg, InlineKeyboardMarkup(btns)
-
-
 # Handlers
 def start(update: Update, context: CallbackContext, message_id=None):
     checkuser(update.message.chat)
     msg = "Willkommen beim Telegram-Bot des Bewegungsmelders. Über die Buttons unten kannst du nach aktuellen " \
           "Veranstaltungen suchen und deine Benachrichtigungen verwalten. Informationen über diesen Bot gibt's hier " \
           "/about. "
-    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Aktuelle Veranstaltungen", callback_data="0$0")],
-                                         [InlineKeyboardButton("Benachrichtigungen", callback_data="3"),
-                                          InlineKeyboardButton("Filter", callback_data="4")]])
+    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0")],
+                                         [InlineKeyboardButton("⏰ Benachrichtigungen", callback_data="3"),
+                                          InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
     send(context.bot, update.message.chat_id, msg, reply_markup, message_id)
 
 
@@ -148,7 +89,7 @@ def inline_callback(update: Update, context: CallbackContext):
     # message structure: ID$payload
     # ID: H - Home
     #     0 - list events according to saved filters, payload: day
-    #     1 - modify groups, payload: id, enable 1 /disable 0 - TODO
+    #     1 - modify groups, payload: id, show 1 /exclude 0
     #     2 - modify event categories: id, enable 1 /disable 0
     #     3 - modify notifications: Schedule.name
     #     4 - filter overview
@@ -159,21 +100,24 @@ def inline_callback(update: Update, context: CallbackContext):
         msg, _ = get_events(int(args[1]), message.chat.id)
         if args[1] == "0":
             reply_markup = InlineKeyboardMarkup(
-                [[InlineKeyboardButton(">", callback_data="0$1")],
-                 [InlineKeyboardButton("Start", callback_data="H"), InlineKeyboardButton("Filter", callback_data="4")]])
+                [[InlineKeyboardButton("➡️", callback_data="0$1")],
+                 [InlineKeyboardButton("🏡 Start", callback_data="H"), InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
         else:
             reply_markup = InlineKeyboardMarkup(
-                [[InlineKeyboardButton("<", callback_data="0$" + str(int(args[1]) - 1)),
-                  InlineKeyboardButton(">", callback_data="0$" + str(int(args[1]) + 1))],
-                 [InlineKeyboardButton("Start", callback_data="H"), InlineKeyboardButton("Filter", callback_data="4")]])
+                [[InlineKeyboardButton("⬅️", callback_data="0$" + str(int(args[1]) - 1)),
+                  InlineKeyboardButton("➡️", callback_data="0$" + str(int(args[1]) + 1))],
+                 [InlineKeyboardButton("🏡 Start", callback_data="H"), InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
 
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "4":
         msg = get_filter_overview(message.chat.id)
         reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("Gruppen filtern", callback_data="1"),
-              InlineKeyboardButton("Kategorien filtern", callback_data="2")],
-             [InlineKeyboardButton("Veranstaltungen", callback_data="0$0")]])
+            [[InlineKeyboardButton("👯 Gruppen filtern", callback_data="1"),
+              InlineKeyboardButton("📚 Kategorien filtern", callback_data="2")],
+             [InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0")]])
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+    elif args[0] == "1":
+        msg, reply_markup = process_groups(message.chat.id, args)
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "2":
         msg, reply_markup = process_categories(message.chat.id, args)
@@ -181,11 +125,11 @@ def inline_callback(update: Update, context: CallbackContext):
     elif args[0] == "3":
         msg = process_notifications(message.chat.id, args)
         reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("tägliche Benachrichtigungen", callback_data="3$" + Schedule.DAILY.name)],
-             [InlineKeyboardButton("wöchentliche Benachrichtigungen", callback_data="3$" + Schedule.WEEKLY.name)],
-             [InlineKeyboardButton("keine Benachrichtigungen", callback_data="3$" + Schedule.NONE.name)],
-             [InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
-              InlineKeyboardButton("Filter", callback_data="4")]])
+            [[InlineKeyboardButton("⏰ tägliche Benachrichtigungen", callback_data="3$" + Schedule.DAILY.name)],
+             [InlineKeyboardButton("📅 wöchentliche Benachrichtigungen", callback_data="3$" + Schedule.WEEKLY.name)],
+             [InlineKeyboardButton("🔭 keine Benachrichtigungen", callback_data="3$" + Schedule.NONE.name)],
+             [InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0"),
+              InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     else:
         logging.error("unknown inline command")
@@ -200,8 +144,8 @@ def send_daily_notifications(bot=None):
         bot = Bot(token=config['BotToken'])
 
     reply_markup = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Veranstaltungen", callback_data="0$0"),
-          InlineKeyboardButton("Benachrichtigungen ändern", callback_data="3")]])
+        [[InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0"),
+          InlineKeyboardButton("⏰ Benachrichtigungen ändern", callback_data="3")]])
 
     session = Session()
     users = session.query(User).filter(User.notify_schedule == Schedule.DAILY)

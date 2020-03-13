@@ -25,7 +25,7 @@ class User(Base):
     username = Column(String(255), nullable=True)
     counter = Column(Integer(), nullable=True)
     notify_schedule = Column(Enum(Schedule))
-    selected_groups = relationship("Group", secondary=association_table)
+    excluded_groups = relationship("Group", secondary=association_table)
     selected_categories = Column(ArrayOfEnum())
     message_id = Column(Integer(), nullable=True)
 

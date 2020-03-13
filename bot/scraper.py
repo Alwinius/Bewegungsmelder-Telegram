@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 from bot.components.base import Session
 from bot.components.event import Event
 from bot.components.group import Group
-import logging
 
 
 class Scraper:
@@ -47,7 +46,6 @@ class Scraper:
                 stored_event: Event = session.query(Event).filter(Event.event_url == e[0]).first()
                 if stored_event is None:
                     # check if group exists before creating event
-                    logging.info("Creating new event "+e[0])
                     stored_group = session.query(Group).filter(Group.url_id == e[2]).first()
                     if stored_group is None:
                         g = Group(url_id=e[2], name=e[1])
