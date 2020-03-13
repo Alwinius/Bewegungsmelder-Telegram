@@ -28,9 +28,9 @@ def get_filter_overview(user_id: int):
     msg = "Du siehst aktuell folgende Kategorien:\n"
     for cat in Category:
         if cat in user.selected_categories:
-            msg += "✅ " + cat + "\n"
+            msg += "✅ " + cat.value + "\n"
         else:
-            msg += "🚫 " + cat + "\n"
+            msg += "🚫 " + cat.value + "\n"
     msg += "und diese Gruppen:\n"
     session.close()
     return msg
@@ -81,11 +81,11 @@ def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
     if len(args) > 2:
         cat: Category = Category[args[2]]
         selected_categories = deepcopy(user.selected_categories)
-        if args[1] == "1" and cat.value not in user.selected_categories:  # this means enable
+        if args[1] == "1" and cat not in user.selected_categories:  # this means enable
             selected_categories.append(cat)
             user.selected_categories = selected_categories
             session.commit()
-        elif args[1] == "0" and cat.value in user.selected_categories:  # this means disable
+        elif args[1] == "0" and cat in user.selected_categories:  # this means disable
             logging.debug("removing item from categories")
             selected_categories.remove(cat)
             user.selected_categories = selected_categories
@@ -95,8 +95,8 @@ def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
     btns = []
     for cat in Category:
         if cat in user.selected_categories:
-            msg += "✅ " + cat + "\n"
-            btn = InlineKeyboardButton(cat, callback_data="2$0$" + cat.name)
+            msg += "✅ " + cat.value + "\n"
+            btn = InlineKeyboardButton(cat.value, callback_data="2$0$" + cat.name)
             if first_element:
                 btns.append([btn])
                 first_element = False
@@ -104,8 +104,8 @@ def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
                 btns[-1].append(btn)
                 first_element = True
         else:
-            msg += "🚫 " + cat + "\n"
-            btn = InlineKeyboardButton(cat, callback_data="2$1$" + cat.name)
+            msg += "🚫 " + cat.value + "\n"
+            btn = InlineKeyboardButton(cat.value, callback_data="2$1$" + cat.name)
             if first_element:
                 btns.append([btn])
                 first_element = False

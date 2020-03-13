@@ -5,7 +5,7 @@
 import enum
 
 
-class Category(str, enum.Enum):
+class Category(enum.Enum):
     AKTION = "Aktion"
     DEMO = "Demonstration & Kundgebung"
     DISKUSSION = "Diskussion"

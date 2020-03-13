@@ -4,6 +4,7 @@
 
 
 from sqlalchemy import TypeDecorator, cast, String
+from bot.components.category import Category
 
 import json
 
@@ -17,10 +18,17 @@ class ArrayOfEnum(TypeDecorator):
     impl = String
 
     def process_bind_param(self, value, dialect):
-        return json.dumps(value)
+        string_list = []
+        for v in value:
+            string_list.append(v.name)
+        return json.dumps(string_list)
 
     def process_result_value(self, value, dialect):
-        return json.loads(value)
+        ret = json.loads(value)
+        cat_list = []
+        for r in ret:
+            cat_list.append(Category[r])
+        return cat_list
 
     def copy(self):
         return ArrayOfEnum(self.impl.length)
