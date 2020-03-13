@@ -4,8 +4,9 @@
 
 import logging
 from typing import List
-from bot.messaging import checkuser, send
+from bot.messaging import checkuser, send, send_developer_message
 from bot.components import config
+from bot.scraper import Scraper
 from bot.components.base import Base, Session, engine
 from bot.components.event import Event
 from bot.components.user import User
@@ -49,7 +50,7 @@ def process_notifications(user_id: int, args: list):
     return msg
 
 
-def get_events(date: int, chat_id: int) -> str:
+def get_events(date: int, chat_id: int) -> [str, bool]:
     events_today = False
     selected_date = datetime.today() + timedelta(days=date)
     if date == 0:
@@ -69,9 +70,9 @@ def get_events(date: int, chat_id: int) -> str:
             msg += str(event)
     session.close()
     if events_today:
-        return msg
+        return msg, True
     else:
-        return "Leider finden " + print_day + " keine Veranstaltungen statt."
+        return "Leider finden " + print_day + " keine Veranstaltungen statt.", False
 
 
 def process_categories(chat_id: int, args: list) -> [str, InlineKeyboardMarkup]:
@@ -155,7 +156,7 @@ def inline_callback(update: Update, context: CallbackContext):
     if args[0] == "H":
         start(update.callback_query, context, message.message_id)
     elif args[0] == "0":
-        msg = get_events(int(args[1]), message.chat.id)
+        msg, _ = get_events(int(args[1]), message.chat.id)
         if args[1] == "0":
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton(">", callback_data="0$1")],
@@ -190,42 +191,11 @@ def inline_callback(update: Update, context: CallbackContext):
         logging.error("unknown inline command")
         msg = "Kommando nicht erkannt"
         send(context.bot, message.chat_id, msg, message_id=message.message_id)
-
-    # if int(args[0]) > 400:
-    #     # show mealplan
-    #     mensa_id, mensa_name = args
-    #     noti, presel = checkuser(message.chat, sel=mensa_id)
-    #
-    #     if int(noti) <= 0 or int(noti) != int(mensa_id):
-    #         noti_btn = InlineKeyboardButton("Auto-Update aktivieren", callback_data="5$1")
-    #     else:
-    #         noti_btn = InlineKeyboardButton("Auto-Update deaktivieren", callback_data="5$0")
-    #
-    #     msg = menu_manager.get_menu(int(mensa_id)).get_meals_message()
-    #     reply_markup = InlineKeyboardMarkup([[noti_btn]] + button_list)
-    #     send(context.bot, message.chat_id, msg, reply_markup=reply_markup, message_id=message.message_id)
-    # elif int(args[0]) == 5 and len(args) > 1:
-    #     # manage notifications
-    #     noti, presel = checkuser(message.chat)
-    #     enabled = args[1] == "1"
-    #     change_notifications(message.chat, presel, enabled)
-    #
-    #     if enabled:
-    #         noti_btn = InlineKeyboardButton("Auto-Update deaktivieren", callback_data="5$0")
-    #         msg = "Auto-Update aktiviert für Mensa " + MENSEN[int(presel)]
-    #     else:
-    #         noti_btn = InlineKeyboardButton("Auto-Update aktivieren", callback_data="5$1")
-    #         msg = "Auto-Update deaktiviert"
-    #
-    #     reply_markup = InlineKeyboardMarkup([[noti_btn]] + button_list)
-    #     send(context.bot, message.chat_id, msg, reply_markup=reply_markup, message_id=message.message_id)
-    # else:
-
-    # dev_msg = f"Inlinekommando nicht erkannt.\n\nData: {update.callback_query.data}\nUser:{message.chat}"
-    # send_developer_message(context.bot, dev_msg)
+        dev_msg = f"Inlinekommando nicht erkannt.\n\nData: {update.callback_query.data}\nUser:{message.chat}"
+        send_developer_message(context.bot, dev_msg)
 
 
-def send_notifications(bot=None):
+def send_daily_notifications(bot=None):
     if bot is None:
         bot = Bot(token=config['BotToken'])
 
@@ -238,21 +208,29 @@ def send_notifications(bot=None):
     for user in users:
         user.counter += 1
         session.commit()
-        msg = get_events(0, user.id)
-        send(bot, user.id, msg,
-             reply_markup=reply_markup)
+        msg, events = get_events(0, user.id)
+        if events:
+            send(bot, user.id, msg,
+                 reply_markup=reply_markup)
     session.close()
 
 
-def job_callback(context: CallbackContext):
-    logging.debug("Scheduled notification update triggered")
-    send_notifications(bot=context.bot)
+def daily_notification_callback(context: CallbackContext):
+    logging.debug("Scheduled daily notifications triggered")
+    send_daily_notifications(bot=context.bot)
+
+
+def scraper_callback(context: CallbackContext = None):
+    logging.debug("Scraping triggered")
+    Scraper.start_scraping()
+    if context is not None:
+        send_developer_message(context.bot, "Scraper getriggert")
 
 
 def run_daemon():
     Base.metadata.create_all(engine)
 
-    updater = Updater(token=config["BotToken"], use_context=True)
+    updater: Updater = Updater(token=config["BotToken"], use_context=True)
     dispatcher = updater.dispatcher
 
     start_handler = CommandHandler('start', start)
@@ -265,11 +243,14 @@ def run_daemon():
     dispatcher.add_handler(fallback_handler)
 
     # schedule daily update
-    hour = int(config.get('NotificationHour', 1))
-    first = time(hour=hour, minute=1)
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
+    hour = int(config.get('NotificationHour', 0))
+    first = time(hour=hour, minute=1, tzinfo=now.tzinfo)
     logging.info(f"Job will run daily at {first}. UTC time is {now.strftime('%H:%M:%S')}.")
-    updater.job_queue.run_daily(job_callback, time=first)
+    updater.job_queue.run_daily(daily_notification_callback, time=first)
+
+    # the scraper will run every 5 hours
+    updater.job_queue.run_repeating(scraper_callback, timedelta(hours=5))
 
     webhook_url = config.get('WebhookUrl', "").strip()
     if len(webhook_url) > 0:

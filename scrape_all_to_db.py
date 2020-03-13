@@ -15,7 +15,7 @@ def get_events_block(page_id: int):
               "%5D=Musik%2C+Konzert+%26+Party&event-atts%5B%5D=Plenum+%26+regelm.Treffen&event-atts%5B%5D" \
               "=Gerichtsprozess&event-atts%5B%5D=Rundgang+%26+Outdoor&event-atts%5B%5D=Sonstiges&event-atts%5B%5D" \
               "=Vortrag+%26+Infoveranstaltung&event-atts%5B%5D=Workshop+%26+Skillssharing&event-atts%5B%5D=Beratung" \
-              "&submit=Ausw%C3%A4hlen "
+              "&submit=Ausw%C3%A4hlen"
     page = requests.post("https://bewegungsmelder-aachen.de/kalender/?pno=" + str(page_id), data=payload,
                          headers={'Content-Type': 'application/x-www-form-urlencoded'})
     soup = BeautifulSoup(page.content, "lxml")

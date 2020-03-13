@@ -11,8 +11,8 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 Base.metadata.create_all(engine)
 
-msg = get_events(0, config['DEFAULT']['AdminId'])
-if "Leider finden" not in msg:
+msg, events = get_events(0, config['DEFAULT']['AdminId'])
+if events:
     print(msg)
     bot = telegram.Bot(token=config['DEFAULT']['BotToken'])
     ret = bot.send_message(chat_id=config['DEFAULT']['TodayChannel'], text=msg, parse_mode=telegram.ParseMode.HTML, disable_web_page_preview=True)

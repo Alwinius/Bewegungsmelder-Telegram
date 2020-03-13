@@ -8,7 +8,7 @@ from bot.components.base import Session
 from bot.components.user import User
 from bot.components import config
 
-from telegram import Update, Chat, ParseMode, InlineKeyboardMarkup, InlineKeyboardButton, Message, Bot
+from telegram import Chat, ParseMode, InlineKeyboardMarkup, InlineKeyboardButton, Bot
 from telegram.error import ChatMigrated, TimedOut, Unauthorized, BadRequest
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
@@ -16,13 +16,13 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 default_reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Start", callback_data="H")]])
 
 
-def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=None):
+def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=None) -> bool:
     try:
         if message_id is None or message_id == 0:
             rep = bot.sendMessage(chat_id=chat_id, text=message, reply_markup=reply_markup,
                                   parse_mode=ParseMode.HTML)
             session = Session()
-            user = session.query(User).filter(User.id == chat_id).first()
+            user: User = session.query(User).filter(User.id == chat_id).first()
             user.message_id = rep.message_id
             session.commit()
             session.close()

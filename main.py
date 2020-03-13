@@ -19,8 +19,8 @@ if __name__ == '__main__':
 
     if sys.argv[1] == "daemon":
         daemon.run_daemon()
-    elif sys.argv[1] == "notifications":
-        print("not implemented")
+    elif sys.argv[1] == "scrape":
+        daemon.scraper_callback()
     elif sys.argv[1] in ("-h", "--help", "help"):
         usage()
     else:
