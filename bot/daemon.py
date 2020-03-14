@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # created by Alwin Ebermann (alwin@alwin.net.au)
 
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from typing import List
 
 from sqlalchemy import and_, func
@@ -25,6 +25,8 @@ def process_notifications(user_id: int, args: list):
     user = session.query(User).filter(User.id == user_id).first()
     if len(args) > 1:
         new_notification: Schedule = Schedule[args[1]]
+        if user.notify_schedule == Schedule.DAILY and new_notification == Schedule.WEEKLY or user.notify_schedule == Schedule.WEEKLY and new_notification == Schedule.DAILY:
+            new_notification = Schedule.WEEKLYANDDAILY
         if new_notification != user.notify_schedule:
             user.notify_schedule = new_notification
             session.commit()
@@ -44,7 +46,7 @@ def get_events(date: int, chat_id: int) -> [str, bool]:
         print_day = "morgen"
     else:
         print_day = "am " + selected_date.strftime("%a, %d.%m.")
-    msg = "Folgende Veranstaltungen finden " + print_day + " statt:\n"
+    msg = "<b>Folgende Veranstaltungen finden " + print_day + " statt:</b>\n"
     session = Session()
     events = session.query(Event).filter(and_(func.date(Event.start) <= selected_date.date(),
                                               func.date(Event.end) >= selected_date.date()))
@@ -58,6 +60,20 @@ def get_events(date: int, chat_id: int) -> [str, bool]:
         return msg, True
     else:
         return "Leider finden " + print_day + " keine Veranstaltungen statt.", False
+
+
+def get_week(user_id: int):
+    msg = "Hier kommt deine Wochenübersicht:\n"
+    empty = True
+    for i in range(1,8):
+        part, event = get_events(i, user_id)
+        if event:
+            empty = False
+            msg += part
+    if empty:
+        return None
+    else:
+        return msg
 
 
 # Handlers
@@ -101,12 +117,14 @@ def inline_callback(update: Update, context: CallbackContext):
         if args[1] == "0":
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("➡️", callback_data="0$1")],
-                 [InlineKeyboardButton("🏡 Start", callback_data="H"), InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
+                 [InlineKeyboardButton("🏡 Start", callback_data="H"),
+                  InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
         else:
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("⬅️", callback_data="0$" + str(int(args[1]) - 1)),
                   InlineKeyboardButton("➡️", callback_data="0$" + str(int(args[1]) + 1))],
-                 [InlineKeyboardButton("🏡 Start", callback_data="H"), InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
+                 [InlineKeyboardButton("🏡 Start", callback_data="H"),
+                  InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
 
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "4":
@@ -148,7 +166,8 @@ def send_daily_notifications(bot=None):
           InlineKeyboardButton("⏰ Benachrichtigungen ändern", callback_data="3")]])
 
     session = Session()
-    users = session.query(User).filter(User.notify_schedule == Schedule.DAILY)
+    users = session.query(User) \
+        .filter((User.notify_schedule == Schedule.DAILY) | (User.notify_schedule == Schedule.WEEKLYANDDAILY))
     for user in users:
         user.counter += 1
         session.commit()
@@ -159,9 +178,35 @@ def send_daily_notifications(bot=None):
     session.close()
 
 
+def send_weekly_notifications(bot=None):
+    if bot is None:
+        bot = Bot(token=config['BotToken'])
+    reply_markup = InlineKeyboardMarkup(
+        [[InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0"),
+          InlineKeyboardButton("⏰ Benachrichtigungen ändern", callback_data="3")]])
+
+    session = Session()
+    users = session.query(User) \
+        .filter((User.notify_schedule == Schedule.WEEKLY) | (User.notify_schedule == Schedule.WEEKLYANDDAILY))
+    for user in users:
+        user.counter += 1
+        session.commit()
+        msg = get_week(user.id)
+        if msg is not None:
+            send(bot, user.id, msg,
+                 reply_markup=reply_markup)
+    session.close()
+
+
 def daily_notification_callback(context: CallbackContext):
-    logging.debug("Scheduled daily notifications triggered")
+    logging.debug("Daily notification triggered")
     send_daily_notifications(bot=context.bot)
+
+
+def weekly_notification_callback(context: CallbackContext = None):
+    if datetime.now().weekday() == 6:
+        logging.debug("Weekly notification triggered")
+        send_weekly_notifications(bot=context.bot)
 
 
 def scraper_callback(context: CallbackContext = None):
@@ -185,14 +230,16 @@ def run_daemon():
     dispatcher.add_handler(fallback_handler)
 
     # schedule daily update
-    now = datetime.now()
+    now = datetime.now(timezone.utc).astimezone()
     hour = int(config.get('NotificationHour', 0))
-    first = time(hour=hour, minute=1, tzinfo=now.tzinfo)
-    logging.info(f"Job will run daily at {first}. UTC time is {now.strftime('%H:%M:%S')}.")
-    updater.job_queue.run_daily(daily_notification_callback, time=first)
+    first_daily = time(hour=hour, minute=1, tzinfo=now.tzinfo)
+    logging.info(f"Job will run daily at {first_daily}. Server time is {now.strftime('%H:%M:%S')}.")
+    updater.job_queue.run_daily(daily_notification_callback, time=first_daily)
 
     # the scraper will run every 5 hours
     updater.job_queue.run_repeating(scraper_callback, timedelta(hours=5))
+    # the weekly notification will run at lunch time on sunday (weekday filtering in function)
+    updater.job_queue.run_daily(weekly_notification_callback, time=time(hour=12, tzinfo=now.tzinfo))
 
     webhook_url = config.get('WebhookUrl', "").strip()
     if len(webhook_url) > 0:

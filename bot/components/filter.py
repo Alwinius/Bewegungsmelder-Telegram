@@ -19,7 +19,7 @@ def get_filter_overview(user_id: int):
     msg = "Du siehst aktuell folgende Kategorien:\n"
     for cat in Category:
         if cat in user.selected_categories:
-            msg += "✅ " + cat.value + "\n"
+            msg += "📣 " + cat.value + "\n"
         else:
             msg += "🚫 " + cat.value + "\n"
     msg += "und diese Gruppen:\n"
@@ -28,7 +28,7 @@ def get_filter_overview(user_id: int):
         if group in user.excluded_groups:
             msg += "🚫 " + group.name + "\n"
         else:
-            msg += "✅ " + group.name + "\n"
+            msg += "📣 " + group.name + "\n"
     session.close()
     return msg
 
@@ -52,11 +52,11 @@ def process_groups(user_id: int, args: list) -> [str, InlineKeyboardMarkup]:
     groups = session.query(Group)
     for group in groups:
         if group in user.excluded_groups:
-            btn = InlineKeyboardButton("🚫 "+group.name, callback_data="1$1$" + str(group.id))
-            msg += "🚫 " + group.name + "\n"
+            btn = InlineKeyboardButton("🔇 "+group.name, callback_data="1$1$" + str(group.id))
+            msg += "🔇 " + group.name + "\n"
         else:
-            btn = InlineKeyboardButton("✅ "+group.name, callback_data="1$0$" + str(group.id))
-            msg += "✅ " + group.name + "\n"
+            btn = InlineKeyboardButton("📣 "+group.name, callback_data="1$0$" + str(group.id))
+            msg += "📣 " + group.name + "\n"
 
         if first_element:
             btns.append([btn])
@@ -98,12 +98,12 @@ def process_categories(user_id: int, args: list) -> [str, InlineKeyboardMarkup]:
     all_activated = True
     for cat in Category:
         if cat in user.selected_categories:
-            msg += "✅ " + cat.value + "\n"
-            btn = InlineKeyboardButton("✅ "+cat.value, callback_data="2$0$" + cat.name)
+            msg += "📣 " + cat.value + "\n"
+            btn = InlineKeyboardButton("📣 "+cat.value, callback_data="2$0$" + cat.name)
         else:
             all_activated=False
-            msg += "🚫 " + cat.value + "\n"
-            btn = InlineKeyboardButton("🚫 "+cat.value, callback_data="2$1$" + cat.name)
+            msg += "🔇 " + cat.value + "\n"
+            btn = InlineKeyboardButton("🔇 "+cat.value, callback_data="2$1$" + cat.name)
 
         if first_element:
             btns.append([btn])
@@ -113,9 +113,9 @@ def process_categories(user_id: int, args: list) -> [str, InlineKeyboardMarkup]:
             first_element = True
     # special handling of the "Alle" button
     if all_activated:
-        btn = InlineKeyboardButton("✅ Alle", callback_data="2$NONE")
+        btn = InlineKeyboardButton("📣 Alle", callback_data="2$NONE")
     else:
-        btn = InlineKeyboardButton("🚫 Alle", callback_data="2$ALL")
+        btn = InlineKeyboardButton("🔇 Alle", callback_data="2$ALL")
     if first_element:
         btns.append(btn)
     else:

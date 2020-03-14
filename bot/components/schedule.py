@@ -9,3 +9,4 @@ class Schedule(enum.Enum):
     NONE = "k"
     WEEKLY = "wöchentlich "
     DAILY = "täglich "
+    WEEKLYANDDAILY = "wöchentlich und täglich "

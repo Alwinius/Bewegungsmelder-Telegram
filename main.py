@@ -9,7 +9,7 @@ from bot import daemon
 
 def usage():
     print("Bewegungsmelder-Telegram-Bot")
-    print(f"Usage: {sys.argv[0]} <daemon|notifications>", file=sys.stderr)
+    print(f"Usage: {sys.argv[0]} <daemon|scrape>", file=sys.stderr)
     sys.exit(1)
 
 
@@ -21,6 +21,8 @@ if __name__ == '__main__':
         daemon.run_daemon()
     elif sys.argv[1] == "scrape":
         daemon.scraper_callback()
+    elif sys.argv[1] == "weekly":
+        daemon.send_weekly_notifications()
     elif sys.argv[1] in ("-h", "--help", "help"):
         usage()
     else:
