@@ -167,8 +167,6 @@ def daily_notification_callback(context: CallbackContext):
 def scraper_callback(context: CallbackContext = None):
     logging.debug("Scraping triggered")
     Scraper.start_scraping()
-    if context is not None:
-        send_developer_message(context.bot, "Scraper getriggert")
 
 
 def run_daemon():
