@@ -66,7 +66,7 @@ def get_events(date: int, chat_id: int) -> [str, bool]:
 def get_week(user_id: int):
     msg = "Hier kommt deine Wochenübersicht:\n"
     empty = True
-    for i in range(1,8):
+    for i in range(1, 8):
         part, event = get_events(i, user_id)
         if event:
             empty = False
@@ -240,11 +240,13 @@ def run_daemon():
     updater.job_queue.run_daily(weekly_notification_callback, time=time(hour=12, tzinfo=now.tzinfo))
 
     webhook_url = config.get('WebhookUrl', "").strip()
+    webhook_port = config.get('Port', "")
+    webhook_port = int(webhook_port) if webhook_port != "" else 8080
     if len(webhook_url) > 0:
         updater.bot.set_webhook(webhook_url)
         updater.start_webhook(
             listen=config.get('Host', 'localhost'),
-            port=config.get('Port', 4215),
+            port=config.get('Port', webhook_port),
             webhook_url=webhook_url)
     else:
         # use polling if no webhook is set
