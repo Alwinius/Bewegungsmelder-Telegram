@@ -78,9 +78,7 @@ def checkuser(chat: Chat):
         session.add(new_user)
         session.commit()
         session.close()
-        return None
     else:
         entry.counter += 1
         session.commit()
         session.close()
-        return None

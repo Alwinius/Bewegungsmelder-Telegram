@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta, time, timezone
 from typing import List
+import locale
 
 from sqlalchemy import and_, func
 from telegram import Update, Message, Bot
@@ -117,22 +118,18 @@ def inline_callback(update: Update, context: CallbackContext):
         if args[1] == "0":
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("➡️", callback_data="0$1")],
-                 [InlineKeyboardButton("🏡 Start", callback_data="H"),
+                 [InlineKeyboardButton("⏰ Benachrichtigungen", callback_data="3"),
                   InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
         else:
             reply_markup = InlineKeyboardMarkup(
                 [[InlineKeyboardButton("⬅️", callback_data="0$" + str(int(args[1]) - 1)),
                   InlineKeyboardButton("➡️", callback_data="0$" + str(int(args[1]) + 1))],
-                 [InlineKeyboardButton("🏡 Start", callback_data="H"),
+                 [InlineKeyboardButton("⏰ Benachrichtigungen", callback_data="3"),
                   InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
 
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "4":
-        msg = get_filter_overview(message.chat.id)
-        reply_markup = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("👯 Gruppen filtern", callback_data="1"),
-              InlineKeyboardButton("📚 Kategorien filtern", callback_data="2")],
-             [InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0")]])
+        msg, reply_markup = get_filter_overview(message.chat.id)
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "1":
         msg, reply_markup = process_groups(message.chat.id, args)
@@ -216,6 +213,7 @@ def scraper_callback(context: CallbackContext = None):
 
 def run_daemon():
     Base.metadata.create_all(engine)
+    locale.setlocale(locale.LC_TIME, "de_DE")
 
     updater: Updater = Updater(token=config["BotToken"], use_context=True)
     dispatcher = updater.dispatcher
