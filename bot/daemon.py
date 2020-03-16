@@ -111,7 +111,7 @@ def inline_callback(update: Update, context: CallbackContext):
     #     3 - modify notifications: Schedule.name
     #     4 - filter overview
 
-    if args[0] == "H":
+    if args[0] == "H": # this is not called by a button anymore
         start(update.callback_query, context, message.message_id)
     elif args[0] == "0":
         msg, _ = get_events(int(args[1]), message.chat.id)
@@ -130,13 +130,13 @@ def inline_callback(update: Update, context: CallbackContext):
         send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
     elif args[0] == "4":
         msg, reply_markup = get_filter_overview(message.chat.id)
-        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id, callback_id=update.callback_query.id)
     elif args[0] == "1":
         msg, reply_markup = process_groups(message.chat.id, args)
-        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id, callback_id=update.callback_query.id)
     elif args[0] == "2":
         msg, reply_markup = process_categories(message.chat.id, args)
-        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id, callback_id=update.callback_query.id)
     elif args[0] == "3":
         msg = process_notifications(message.chat.id, args)
         reply_markup = InlineKeyboardMarkup(
@@ -145,11 +145,11 @@ def inline_callback(update: Update, context: CallbackContext):
              [InlineKeyboardButton("🔭 keine Benachrichtigungen", callback_data="3$" + Schedule.NONE.name)],
              [InlineKeyboardButton("📅 Veranstaltungen", callback_data="0$0"),
               InlineKeyboardButton("🗂️ Filter", callback_data="4")]])
-        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id)
+        send(context.bot, message.chat.id, msg, reply_markup, message_id=message.message_id, callback_id=update.callback_query.id)
     else:
         logging.error("unknown inline command")
         msg = "Kommando nicht erkannt"
-        send(context.bot, message.chat_id, msg, message_id=message.message_id)
+        send(context.bot, message.chat_id, msg, message_id=message.message_id, callback_id=update.callback_query.id)
         dev_msg = f"Inlinekommando nicht erkannt.\n\nData: {update.callback_query.data}\nUser:{message.chat}"
         send_developer_message(context.bot, dev_msg)
 

@@ -1,0 +1,12 @@
+# environment variables are resolved from the .env file (which is not part of the git repository)
+version: "3"
+services:
+  bewegungsmelderbot:
+    build: .
+    restart: always
+    ports:
+      - "127.0.0.1:${PORT}:8080"
+    volumes:
+      - ${PWD}/bewegungsmelder.sqlite:/app/bewegungsmelder.sqlite
+      - ${PWD}/config.ini:/app/config.ini
+      - /etc/localtime:/etc/localtime:ro # this is to get local time within the container

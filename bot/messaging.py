@@ -16,7 +16,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 default_reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("Start", callback_data="H")]])
 
 
-def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=None) -> bool:
+def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=None, callback_id=None) -> bool:
     try:
         if message_id is None or message_id == 0:
             rep = bot.sendMessage(chat_id=chat_id, text=message, reply_markup=reply_markup,
@@ -28,6 +28,8 @@ def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=No
             session.close()
             return True
         else:
+            if callback_id is not None:
+                bot.answer_callback_query(callback_query_id=callback_id)
             rep = bot.editMessageText(chat_id=chat_id, text=message, message_id=message_id, reply_markup=reply_markup,
                                       parse_mode=ParseMode.HTML)
             session = Session()
@@ -50,7 +52,7 @@ def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=No
         return True
     except TimedOut:
         time.sleep(5)  # delays for 5 seconds
-        return send(bot, chat_id, message_id, message, reply_markup)
+        return send(bot, chat_id, message_id=message_id, message=message, reply_markup=reply_markup, callback_id=callback_id)
     except ChatMigrated as e:
         session = Session()
         user = session.query(User).filter(User.id == chat_id).first()

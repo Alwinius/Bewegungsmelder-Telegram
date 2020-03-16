@@ -4,3 +4,4 @@ WebhookUrl=
 AdminId=
 Port=8080
 TodayChannel=
+Host=
