@@ -213,7 +213,7 @@ def scraper_callback(context: CallbackContext = None):
 
 def run_daemon():
     Base.metadata.create_all(engine)
-    locale.setlocale(locale.LC_TIME, "de_DE")
+    locale.setlocale(locale.LC_TIME, "de_DE.UTF-8")
 
     updater: Updater = Updater(token=config["BotToken"], use_context=True)
     dispatcher = updater.dispatcher
