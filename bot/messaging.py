@@ -44,7 +44,7 @@ def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=No
             return True
         session = Session()
         user = session.query(User).filter(User.id == chat_id).first()
-        user.notifications = -1
+        user.notify_schedule = None
         logging.exception(f"Error while sending message to {user.first_name} (#{chat_id})")
         send_developer_message(bot, f"Error while sending message to {user.first_name} (#{chat_id})\n\n{e}")
         session.commit()
