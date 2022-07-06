@@ -6,7 +6,7 @@ cryptography==3.2
 decorator==4.4.2
 future==0.18.2
 idna==2.9
-lxml==4.5.0
+lxml==4.9.1
 pycparser==2.20
 python-telegram-bot==12.4.2
 requests==2.23.0
