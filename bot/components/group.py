@@ -11,7 +11,7 @@ from bot.components.event import Event
 
 class Group(Base):
     __tablename__ = 'group'
-    url_id = Column(String)
+    url_id = Column(String, unique=True)
     id = Column(Integer, primary_key=True)
     name = Column(String(255))
     events = relationship("Event", back_populates="group")

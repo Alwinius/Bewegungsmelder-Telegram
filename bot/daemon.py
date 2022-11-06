@@ -168,7 +168,7 @@ def send_daily_notifications(bot=None):
     for user in users:
         user.counter += 1
         session.commit()
-        msg, events = get_events(0, user.id)
+        msg, events = get_events(1, user.id)
         if events:
             send(bot, user.id, msg,
                  reply_markup=reply_markup)
@@ -230,14 +230,14 @@ def run_daemon():
     # schedule daily update
     now = datetime.now(timezone.utc).astimezone()
     hour = int(config.get('NotificationHour', 0))
-    first_daily = time(hour=hour, minute=1, tzinfo=now.tzinfo)
+    first_daily = time(hour=hour, minute=0)
     logging.info(f"Job will run daily at {first_daily}. Server time is {now.strftime('%H:%M:%S')}.")
     updater.job_queue.run_daily(daily_notification_callback, time=first_daily)
 
     # the scraper will run every 5 hours
     updater.job_queue.run_repeating(scraper_callback, timedelta(hours=5))
-    # the weekly notification will run at lunch time on sunday (weekday filtering in function)
-    updater.job_queue.run_daily(weekly_notification_callback, time=time(hour=12, tzinfo=now.tzinfo))
+    # the weekly notification will run at lunchtime on sunday (weekday filtering in function)
+    updater.job_queue.run_daily(weekly_notification_callback, time=time(hour=12, tzinfo=None))
 
     webhook_url = config.get('WebhookUrl', "").strip()
     webhook_port = config.get('Port', "")

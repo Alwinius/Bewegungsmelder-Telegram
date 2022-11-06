@@ -59,10 +59,10 @@ class Event(Base):
     def __str__(self):
         string = "<a href='" + self.event_url + "'><b>" + self.event_name + "</b></a>\n"
         if self.has_time:
-            string += "um " + self.start.strftime("%H:%M")\
-                 + " Uhr von " + self.group.name + "\n"
-        else:
-            string += "von " + self.group.name + "\n"
+            string += "um " + self.start.strftime("%H:%M") + " Uhr "
+        if self.group is not None:
+            string += "von " + self.group.name
+        string += "\n"
         return string
 
     def is_today(self):

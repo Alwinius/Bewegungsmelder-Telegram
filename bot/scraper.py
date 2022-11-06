@@ -43,14 +43,10 @@ class Scraper:
             events_block = Scraper.get_events_block(i)
             for event_block in events_block:
                 e = Scraper.prepare_event_info(event_block)
+                # check if group exists before creating/updating event
+                Scraper.update_groups(session, e[2], e[1])
                 stored_event: Event = session.query(Event).filter(Event.event_url == e[0]).first()
                 if stored_event is None:
-                    # check if group exists before creating event
-                    stored_group = session.query(Group).filter(Group.url_id == e[2]).first()
-                    if stored_group is None:
-                        g = Group(url_id=e[2], name=e[1])
-                        session.add(g)
-                        session.commit()
                     new_event = Event(event_block)
                     session.add(new_event)
                     session.commit()
@@ -58,3 +54,11 @@ class Scraper:
                     stored_event.update(event_block)
                     session.commit()
         session.close()
+
+    @staticmethod
+    def update_groups(session: Session, url_id: str, name: str):
+        stored_group = session.query(Group).filter(Group.url_id == url_id).first()
+        if stored_group is None:
+            g = Group(url_id=url_id, name=name)
+            session.add(g)
+            session.commit()

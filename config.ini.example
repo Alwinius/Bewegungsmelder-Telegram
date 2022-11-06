@@ -5,3 +5,4 @@ AdminId=
 Port=8080
 TodayChannel=
 Host=
+NotificationHour=16
