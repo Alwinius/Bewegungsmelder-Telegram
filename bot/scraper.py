@@ -11,6 +11,7 @@ from bot.components.group import Group
 
 class Scraper:
     SCRAPE_PAGES: int = 5
+    BASE_URL: str = "https://bewegungsmelder-aachen.de"
 
     @staticmethod
     def get_events_block(page_id: int):
@@ -21,7 +22,7 @@ class Scraper:
                   "=Gerichtsprozess&event-atts%5B%5D=Rundgang+%26+Outdoor&event-atts%5B%5D=Sonstiges&event-atts%5B%5D" \
                   "=Vortrag+%26+Infoveranstaltung&event-atts%5B%5D=Workshop+%26+Skillssharing&event-atts%5B%5D=Beratung" \
                   "&submit=Ausw%C3%A4hlen"
-        page = requests.post("https://bewegungsmelder-aachen.de/kalender/?pno=" + str(page_id), data=payload,
+        page = requests.post(Scraper.BASE_URL + "/kalender/?pno=" + str(page_id), data=payload,
                              headers={'Content-Type': 'application/x-www-form-urlencoded'})
         soup = BeautifulSoup(page.content, "lxml")
         return soup.select(".post-column")
@@ -53,7 +54,18 @@ class Scraper:
                 else:
                     stored_event.update(event_block)
                     session.commit()
+
+        Scraper.cleanup_groups(session)
         session.close()
+
+    @staticmethod
+    def cleanup_groups(session):
+        groups = session.query(Group).all()
+        for group in groups:
+            group_page = requests.get(Scraper.BASE_URL + group.url_id + "/")
+            if group_page.status_code == 404:
+                session.delete(group)
+        session.commit()
 
     @staticmethod
     def update_groups(session: Session, url_id: str, name: str):

@@ -5,6 +5,7 @@
 import logging
 import time
 from bot.components.base import Session
+from bot.components.schedule import Schedule
 from bot.components.user import User
 from bot.components import config
 
@@ -44,7 +45,7 @@ def send(bot, chat_id, message, reply_markup=default_reply_markup, message_id=No
             return True
         session = Session()
         user = session.query(User).filter(User.id == chat_id).first()
-        user.notify_schedule = None
+        user.notify_schedule = Schedule.NONE
         logging.exception(f"Error while sending message to {user.first_name} (#{chat_id})")
         send_developer_message(bot, f"Error while sending message to {user.first_name} (#{chat_id})\n\n{e}")
         session.commit()
@@ -82,5 +83,9 @@ def checkuser(chat: Chat):
         session.close()
     else:
         entry.counter += 1
+        entry.first_name = chat.first_name
+        entry.last_name = chat.last_name
+        entry.username = chat.username
+        entry.title = chat.title
         session.commit()
         session.close()
